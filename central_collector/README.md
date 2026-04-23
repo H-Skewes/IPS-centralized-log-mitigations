@@ -16,9 +16,6 @@ central_collector/
 │   ├── base_handler.py       # this is example on how to setup your handlers, look to other files if confused
 │   ├── ebpf_handler.py       # ebpf injection detection and mititgation
 │   └── cron_handler.py       # cron abuse detection and mitigation
-│   # Future:
-│   # arp_handler.py          # Ian's ARP spoofing
-│   # tcp_session_handler.py  # Ethan's TCP hijacking
 ```
 
 ## Setup

@@ -30,6 +30,7 @@ from db import Database
 from handlers.base_handler import BaseHandler
 from handlers.ebpf_handler import EbpfHandler
 from handlers.cron_handler import CronHandler
+from handlers.arp_spoof_handler import ArpSpoofHandler
 # Future handlers:
 # from handlers.arp_handler import ArpHandler
 # from handlers.tcp_session_handler import TcpSessionHandler
@@ -54,7 +55,7 @@ def build_handlers() -> Dict[str, BaseHandler]:
     handlers = [
         EbpfHandler(),
         CronHandler(),
-        # ArpHandler(),
+        ArpSpoofHandler(),
         # TcpSessionHandler(),
     ]
     return {h.alert_type: h for h in handlers}

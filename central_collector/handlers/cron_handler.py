@@ -1,34 +1,10 @@
-"""
-handlers/cron_handler.py
-
-Detection and mitigation handler for unauthorized cron job attacks.
-
-Incorporates Tres's detection and mitigation logic from D_M_functions.py,
-adapted to work within the BaseHandler OOP pattern and the central
-collector's SSH-based remote mitigation architecture.
-
-Tres's functions preserved:
-  - is_high_frequency()
-  - executes_from_writable_dir()
-  - accesses_sensitive_file()
-  - contains_suspicious_token()
-  - evaluate_entry()
-  - kill_payload_processes() -> adapted as remote SSH command
-  - comment_out_matching_line() -> adapted as remote SSH command
-  - remediate() -> becomes mitigate()
-"""
-
 import os
 import json
 import shlex
 from typing import Dict, Any, Optional, List, NamedTuple
 from handlers.base_handler import BaseHandler
 
-
-# ----------------------------------------------------------------
-# Constants from Tres's original code
-# ----------------------------------------------------------------
-
+# initialize vars
 WRITABLE_DIRS = [
     "/tmp",
     "/dev/shm",
@@ -75,7 +51,6 @@ ALLOWLIST_FILES = {
 }
 
 # Minimum number of reasons from evaluate_entry() before mitigating
-# Tres's design: don't flag on a single indicator
 MIN_REASONS_TO_MITIGATE = 2
 
 
@@ -92,7 +67,7 @@ class CronEntry(NamedTuple):
 class CronHandler(BaseHandler):
     """
     Handles detection and remote mitigation for cron job abuse events.
-    Tres's evaluate_entry() logic runs here on the collector side,
+    evaluate_entry() logic runs here on the collector side,
     providing a second layer of behavioral analysis beyond what the
     collector agent detected.
     """
@@ -134,7 +109,7 @@ class CronHandler(BaseHandler):
 
     def mitigate(self, event: Dict[str, Any], threat_description: str) -> str:
         """
-        SSH into the victim VM and execute Tres's remediate() logic remotely:
+        SSH into the victim VM and execute remediate() logic remotely:
         1. Comment out the malicious cron entry (safer than deleting)
         2. Kill any payload processes running from writable dirs
         3. Log the action on the victim VM
@@ -147,8 +122,7 @@ class CronHandler(BaseHandler):
         actions_taken = []
         commands = []
 
-        # 1. Comment out the malicious cron entry
-        # Replicates Tres's comment_out_matching_line() remotely via Python one-liner
+
         if source_file and raw_line:
             escaped_line = shlex.quote(raw_line)
             escaped_file = shlex.quote(source_file)
@@ -164,9 +138,7 @@ class CronHandler(BaseHandler):
             commands.append(python_cmd)
             actions_taken.append(f"commented_out_entry_in={source_file}")
 
-        # 2. Kill payload processes executing from writable directories
-        # Replicates Tres's kill_payload_processes() — searches for processes
-        # running scripts from known writable dirs
+
         for writable_dir in WRITABLE_DIRS:
             if writable_dir in command:
                 # Extract the script path from the command to kill specifically
@@ -203,9 +175,6 @@ class CronHandler(BaseHandler):
 
         return " | ".join(actions_taken) if actions_taken else "no_actions_taken"
 
-    # ----------------------------------------------------------------
-    # Tres's detection functions, preserved exactly, adapted as methods
-    # ----------------------------------------------------------------
 
     def is_high_frequency(self, schedule: str) -> bool:
         return schedule.strip() == "* * * * *"

@@ -1,20 +1,3 @@
-"""
-collector.py
-
-Central Log Collector Server
-
-Runs on the log collector VM (10.10.0.20).
-Receives TLS-encrypted log events from all victim VMs,
-stores them in SQLite, runs detection, and executes mitigations.
-
-Usage:
-    sudo python3 collector.py
-
-Requires:
-    pip install paramiko
-    Self-signed TLS cert (generate with setup_collector.sh)
-"""
-
 import ssl
 import socket
 import json

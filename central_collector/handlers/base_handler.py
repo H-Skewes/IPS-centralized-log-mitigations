@@ -1,13 +1,3 @@
-"""
-handlers/base_handler.py
-
-Abstract base class for all attack-specific detection and mitigation handlers.
-Each attack type implements this to plug into the central collector.
-
-Pattern mirrors the BaseCollector on the victim side — consistent OOP
-interface so adding new attack handlers is straightforward.
-"""
-
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 import paramiko

@@ -8,12 +8,12 @@ from handlers.base_handler import BaseHandler
 class TcpSessionHandler(BaseHandler):
 
     def __init__(self):
-        self._rst_tracker = defaultdict(list)   
-        self._session_map = defaultdict(set)    
+        self._rst_tracker = defaultdict(list)
+        self._session_map = defaultdict(set)
 
     @property
     def alert_type(self) -> str:
-        return "tcp_session"  
+        return "tcp_session"
 
     def detect(self, event: Dict[str, Any]) -> Optional[str]:
         now = time.time()

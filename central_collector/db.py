@@ -1,14 +1,3 @@
-"""
-db.py
-
-SQLite database manager for the central log collector.
-Stores all incoming events and mitigation actions for forensic analysis.
-
-Schema:
-  - events: all raw events received from victim VMs
-  - mitigations: record of every mitigation action taken
-"""
-
 import sqlite3
 import json
 import threading

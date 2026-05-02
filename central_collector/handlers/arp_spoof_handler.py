@@ -24,11 +24,11 @@ class ArpSpoofHandler(BaseHandler):
 
         commands = []
 
-        # Block attacker
+        # Blocks the attacker
         if attacker_ip:
             commands.append(f"iptables -A INPUT -s {attacker_ip} -j DROP")
 
-        # Restore ARP table
+        # Restores the ARP table
         if gateway_ip and real_mac:
             commands.append(f"arp -s {gateway_ip} {real_mac}")
 

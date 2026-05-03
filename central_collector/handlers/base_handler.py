@@ -2,73 +2,33 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 import paramiko
 
-
+# abstract class for detections and mitigations.
 class BaseHandler(ABC):
-    """
-    Abstract base for detection + mitigation handlers on the central collector.
 
-    Each handler:
-    1. Receives events from victim VMs matching its alert_type
-    2. Runs detection logic to confirm/classify the threat
-    3. Executes mitigation by SSHing into the affected VM
-
-    To add a new attack handler:
-    1. Create handlers/your_handler.py subclassing BaseHandler
-    2. Implement alert_type, detect(), and mitigate()
-    3. Register in collector.py
-    """
-
-    # SSH credentials for connecting back to victim VMs
-    # Key-based auth — set up during VM provisioning
+    # needs ssh creds to perform mitigations
     SSH_USER = "root"
     SSH_KEY_PATH = "/root/.ssh/id_ed25519"
     SSH_TIMEOUT = 10
-
+    # defines the type of alert so to reduce false positives
     @property
     @abstractmethod
     def alert_type(self) -> str:
-        """
-        The alert_type string this handler processes.
-        Must match the name property of the corresponding collector.
-        Example: 'ebpf_injection', 'cron_abuse'
-        """
         pass
 
+
+    # based on alert type confirm if there is actually a threat
     @abstractmethod
     def detect(self, event: Dict[str, Any]) -> Optional[str]:
-        """
-        Analyze an incoming event and determine if mitigation is needed.
-
-        Args:
-            event: The full event dict from the victim VM
-
-        Returns:
-            A string describing the threat if mitigation should proceed,
-            or None if the event doesn't warrant action (e.g. low confidence)
-        """
         pass
+    
 
+    # perform mitigations via ssh using bash cmds
     @abstractmethod
     def mitigate(self, event: Dict[str, Any], threat_description: str) -> str:
-        """
-        Execute mitigation against the affected VM.
-
-        Args:
-            event: The full event dict (contains source_vm, pid, etc.)
-            threat_description: The string returned by detect()
-
-        Returns:
-            String summarizing what actions were taken
-        """
         pass
 
+    # acts as entry way to other handlers
     def handle(self, event: Dict[str, Any]) -> Optional[str]:
-        """
-        Main entry point called by the collector for each matching event.
-        Runs detect() then mitigate() if threat confirmed.
-
-        Returns mitigation result string, or None if no action taken.
-        """
         threat = self.detect(event)
         if threat:
             print(f"[{self.alert_type}] THREAT CONFIRMED: {threat}")
@@ -77,15 +37,9 @@ class BaseHandler(ABC):
             return result
         return None
 
-    def ssh_exec(self, host: str, commands: List[str]) -> Dict[str, str]:
-        """
-        SSH into a victim VM and execute a list of commands.
-        Returns dict of command -> output.
 
-        Args:
-            host:     IP of the victim VM
-            commands: List of shell commands to run in sequence
-        """
+    # handles ssh connection
+    def ssh_exec(self, host: str, commands: List[str]) -> Dict[str, str]:
         results = {}
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -113,5 +67,6 @@ class BaseHandler(ABC):
 
         return results
 
+    # reports alert type
     def __repr__(self):
         return f"{self.__class__.__name__}(alert_type={self.alert_type})"

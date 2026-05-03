@@ -4,7 +4,7 @@ import shlex
 from typing import Dict, Any, Optional, List, NamedTuple
 from handlers.base_handler import BaseHandler
 
-# initialize vars
+# directories an attacker would try and abuse since they are writable
 WRITABLE_DIRS = [
     "/tmp",
     "/dev/shm",
@@ -12,7 +12,7 @@ WRITABLE_DIRS = [
     "/run/user",
     "/home",
 ]
-
+# files that normally shouldn't be accessed by a cron job
 SENSITIVE_FILES = [
     "/etc/passwd",
     "/etc/shadow",
@@ -21,7 +21,7 @@ SENSITIVE_FILES = [
     "/.ssh/authorized_keys",
     "/proc/",
 ]
-
+# commands that can be seen in other attacks
 SUSPICIOUS_TOKENS = [
     "curl",
     "wget",
@@ -39,7 +39,7 @@ SUSPICIOUS_TOKENS = [
     "exec",
     "nohup",
 ]
-
+# known cron files
 ALLOWLIST_FILES = {
     "cron",
     "crontab",
@@ -50,12 +50,12 @@ ALLOWLIST_FILES = {
     "dpkg",
 }
 
-# Minimum number of reasons from evaluate_entry() before mitigating
+# Only flag if 2 or more indicators are set off
 MIN_REASONS_TO_MITIGATE = 2
 
 
 class CronEntry(NamedTuple):
-    """Mirrors the CronEntry from the collector side"""
+    """ CronEntry coming from the collector side"""
     schedule: str
     user: str
     command: str
@@ -78,8 +78,8 @@ class CronHandler(BaseHandler):
 
     def detect(self, event: Dict[str, Any]) -> Optional[str]:
         """
-        Re-evaluate the incoming event using Tres's behavioral detection logic.
-        Only mitigate if multiple malicious indicators are present.
+        Rebuild the cron entry fromm the incoming event and run my rules-based detection logic.
+        Only returns an alert if 2 or more indicators are set off.
         """
         # Reconstruct a CronEntry from the event fields
         entry = CronEntry(
@@ -92,13 +92,13 @@ class CronHandler(BaseHandler):
         )
 
         reasons = self.evaluate_entry(entry)
-
+        # Only treat as malicious if multiple behaviors are susppicious
         if len(reasons) >= MIN_REASONS_TO_MITIGATE:
             return (
                 f"Malicious cron entry confirmed ({len(reasons)} indicators): "
                 f"{', '.join(reasons)} | command={entry.command}"
             )
-
+        # If suspicious but did not set off multiiple indictaors, just log for now.
         if reasons:
             print(
                 f"[{self.alert_type}] Low confidence ({len(reasons)} indicator): "
@@ -122,7 +122,7 @@ class CronHandler(BaseHandler):
         actions_taken = []
         commands = []
 
-
+        # 1. comment out malicious cron entry
         if source_file and raw_line:
             escaped_line = shlex.quote(raw_line)
             escaped_file = shlex.quote(source_file)
@@ -138,7 +138,7 @@ class CronHandler(BaseHandler):
             commands.append(python_cmd)
             actions_taken.append(f"commented_out_entry_in={source_file}")
 
-
+        # 2. kill payload processes running from writable dirs
         for writable_dir in WRITABLE_DIRS:
             if writable_dir in command:
                 # Extract the script path from the command to kill specifically
@@ -175,7 +175,7 @@ class CronHandler(BaseHandler):
 
         return " | ".join(actions_taken) if actions_taken else "no_actions_taken"
 
-
+    # -------------- Detection Rules ------------------
     def is_high_frequency(self, schedule: str) -> bool:
         return schedule.strip() == "* * * * *"
 
@@ -193,7 +193,7 @@ class CronHandler(BaseHandler):
 
     def evaluate_entry(self, entry: CronEntry) -> List[str]:
         """
-        Behavior-based detection — Tres's logic preserved exactly.
+        My detection logic at its core.
         Does NOT flag just because a cron job exists.
         Flags only when multiple malicious indicators are present.
         """
@@ -223,7 +223,7 @@ class CronHandler(BaseHandler):
     # ----------------------------------------------------------------
 
     def _extract_script_path(self, command: str, writable_dir: str) -> Optional[str]:
-        """Extract the script path from a command string"""
+        """Try to pull the script path from the command string"""
         tokens = command.split()
         for token in tokens:
             if token.startswith(writable_dir) and not token.startswith("-"):

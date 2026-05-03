@@ -14,27 +14,19 @@ from handlers.base_handler import BaseHandler
 from handlers.ebpf_handler import EbpfHandler
 from handlers.cron_handler import CronHandler
 from handlers.arp_spoof_handler import ArpSpoofHandler
-# Future handlers:
-# from handlers.arp_handler import ArpHandler
 from handlers.tcp_session_handler import TcpSessionHandler
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+# lab config vars
 LISTEN_IP = "0.0.0.0"
 LISTEN_PORT = 8443
 CERTFILE = "server.crt"
 KEYFILE = "server.key"
 DB_PATH = "lab_logs.db"
-# ============================================================
 
 
+# registers handlers
 def build_handlers() -> Dict[str, BaseHandler]:
-    """
-    Instantiate all registered handlers.
-    Keys are alert_type strings matching collector names.
-    """
     handlers = [
         EbpfHandler(),
         CronHandler(),
@@ -43,13 +35,8 @@ def build_handlers() -> Dict[str, BaseHandler]:
     ]
     return {h.alert_type: h for h in handlers}
 
-
+# tls server that receives logs from victims and inserts to sqlite while mitigating attack with handlers
 class CentralCollector:
-    """
-    TLS server that receives log events from victim VMs,
-    persists them to SQLite, and dispatches to attack handlers.
-    """
-
     def __init__(self):
         self.db = Database(DB_PATH)
         self.handlers: Dict[str, BaseHandler] = build_handlers()
@@ -57,13 +44,12 @@ class CentralCollector:
         self._total_received = 0
         self._total_mitigations = 0
 
+
+    # starts tls listener
     def start(self):
-        """Start the TLS listener"""
         self.running = True
-
-        # Build SSL context
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-
+        # ensures certs are in dir
         if os.path.exists(CERTFILE) and os.path.exists(KEYFILE):
             context.load_cert_chain(CERTFILE, KEYFILE)
         else:
@@ -71,17 +57,16 @@ class CentralCollector:
             print("[collector] Run setup_collector.sh to generate certs.")
             print("[collector] Falling back to unencrypted for lab testing.\n")
             context = None
-
+        # sets up the socket and prints collector info
         server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_sock.bind((LISTEN_IP, LISTEN_PORT))
         server_sock.listen(20)
-
         print(f"[collector] Listening on {LISTEN_IP}:{LISTEN_PORT}")
         print(f"[collector] Database: {DB_PATH}")
         print(f"[collector] Handlers: {list(self.handlers.keys())}")
         print(f"[collector] Started at {datetime.utcnow().isoformat()}Z\n")
-
+        # listening loop
         while self.running:
             try:
                 server_sock.settimeout(1.0)
@@ -103,18 +88,16 @@ class CentralCollector:
                 break
             except Exception as e:
                 print(f"[collector] Accept error: {e}")
-
         server_sock.close()
         self._print_stats()
 
+    # event handler for the victims
     def _handle_client(self, conn, addr):
-        """Handle a connected victim VM — receive and process its events"""
         source_ip = addr[0]
         print(f"[collector] Connected: {source_ip}")
 
         try:
             while True:
-                # Read 4-byte length prefix
                 length_bytes = self._recv_all(conn, 4)
                 if not length_bytes:
                     break
@@ -143,8 +126,9 @@ class CentralCollector:
             print(f"[collector] Disconnected: {source_ip}")
             conn.close()
 
+
+    # receives all data helper for client handler
     def _recv_all(self, conn, length: int) -> bytes:
-        """Receive exactly `length` bytes"""
         data = b""
         while len(data) < length:
             try:
@@ -156,15 +140,13 @@ class CentralCollector:
                 return None
         return data
 
+
+    # processes events for handler storing them to db and sends mitigation handlers
     def _process_events(self, events: List[Dict], source_ip: str):
-        """Store events in DB and dispatch to handlers"""
         for event in events:
-            # Ensure source_vm is set
             event.setdefault("source_vm", source_ip)
             alert_type = event.get("alert_type", "unknown")
             severity = event.get("severity", "unknown")
-
-            # 1. Persist to SQLite
             event_id = self.db.insert_event(event)
             self._total_received += 1
 
@@ -172,8 +154,6 @@ class CentralCollector:
                 f"[collector] EVENT [{alert_type}] [{severity}] "
                 f"from {event.get('source_vm')} | {event.get('description', '')[:80]}"
             )
-
-            # 2. Dispatch to the matching handler
             handler = self.handlers.get(alert_type)
             if handler:
                 try:
@@ -193,6 +173,8 @@ class CentralCollector:
                 if alert_type != "unknown":
                     print(f"[collector] No handler for alert_type={alert_type}")
 
+
+    # gets stats from sqlite on run
     def _print_stats(self):
         stats = self.db.get_stats()
         print("\n[collector] === Final Stats ===")
@@ -200,11 +182,13 @@ class CentralCollector:
         print(f"  Total mitigations taken:  {self._total_mitigations}")
         print(f"  Events by type:           {stats.get('by_type', {})}")
         print(f"  Events by severity:       {stats.get('by_severity', {})}")
-
+    
+    # defines loop end
     def stop(self):
         self.running = False
 
 
+# runs the collector ensures correct usage
 def main():
     print("=" * 60)
     print("  Cloud Security Lab - Central Log Collector")

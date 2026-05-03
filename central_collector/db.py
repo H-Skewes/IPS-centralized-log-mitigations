@@ -7,25 +7,24 @@ from typing import List, Dict, Any, Optional
 
 DB_PATH = "lab_logs.db"
 
-
+# class for sqlite db creation insertion etc is safe with threading used in other place
 class Database:
-    """
-    Thread-safe SQLite wrapper for storing events and mitigations.
-    Uses a threading.Lock so multiple handler threads can write safely.
-    """
 
+    # init vars for class
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self._lock = threading.Lock()
         self._init_schema()
 
+
+    # connect to db
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
 
+    # initialize db if it does not exit
     def _init_schema(self):
-        """Create tables if they don't exist"""
         with self._lock:
             conn = self._connect()
             try:
@@ -63,11 +62,9 @@ class Database:
             finally:
                 conn.close()
 
+
+    # inserts a single event into the event table returning the new row id
     def insert_event(self, event: Dict[str, Any]) -> int:
-        """
-        Insert a single event into the events table.
-        Returns the new row ID.
-        """
         with self._lock:
             conn = self._connect()
             try:
@@ -93,6 +90,8 @@ class Database:
             finally:
                 conn.close()
 
+
+    # insertion mitigation into table for logging
     def insert_mitigation(
         self,
         alert_type: str,
@@ -101,7 +100,6 @@ class Database:
         result: str,
         event_id: Optional[int] = None,
     ):
-        """Record a mitigation action that was taken"""
         with self._lock:
             conn = self._connect()
             try:
@@ -124,13 +122,14 @@ class Database:
             finally:
                 conn.close()
 
+
+    #Grabs at most last 50 events
     def get_recent_events(
         self,
         limit: int = 50,
         alert_type: Optional[str] = None,
         source_vm: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Query recent events with optional filters"""
         with self._lock:
             conn = self._connect()
             try:
@@ -156,8 +155,9 @@ class Database:
             finally:
                 conn.close()
 
+
+    # returns session stats
     def get_stats(self) -> Dict[str, Any]:
-        """Return summary statistics"""
         with self._lock:
             conn = self._connect()
             try:
